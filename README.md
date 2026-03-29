@@ -7,4 +7,8 @@ Just open and run the exe file and this window will show letting you map the key
 
 <img width="441" height="596" alt="image" src="https://github.com/user-attachments/assets/f6ac9f13-0524-4090-a64a-d29f39919b65" />
 
+When done mapping close the window it will stayt running in the task bar here: 
+
+<img width="253" height="227" alt="image" src="https://github.com/user-attachments/assets/15c8c6e5-c8f5-4241-b57c-d72a1ba19742" />
+
 
