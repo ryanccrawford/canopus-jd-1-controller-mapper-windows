@@ -8,6 +8,7 @@ using HidSharp;
 
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
+using Button = System.Windows.Controls.Button;
 using MessageBox = System.Windows.MessageBox;
 using ComboBox = System.Windows.Controls.ComboBox;
 using Border = System.Windows.Controls.Border;
@@ -19,6 +20,10 @@ namespace CanopusMapApp
 {
     public partial class MainWindow : Window
     {
+        private const byte LedFeatureReportId = 0x03;
+        private const byte DeckLedMask = 0x01;
+        private const byte JogLedMask = 0x02;
+        private const byte ShuttleLedMask = 0x04;
         private const int VendorId = 0x05E7;
         private const int ProductId = 0x0006;
         private string IniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "canopus_settings_v2.ini");
@@ -26,10 +31,17 @@ namespace CanopusMapApp
         private Dictionary<string, ComboBox> _keyCombos = new Dictionary<string, ComboBox>();
         private Dictionary<string, ComboBox> _labelCombos = new Dictionary<string, ComboBox>();
         private Dictionary<string, Border> _uiRows = new Dictionary<string, Border>();
+        private HidStream? _activeStream;
+        private HidDevice? _activeDevice;
+        private readonly object _streamLock = new object();
+        private DeviceDiagnosticsWindow? _diagnosticsWindow;
+        private readonly HashSet<string> _pressedButtons = new HashSet<string>(StringComparer.Ordinal);
+        private byte _currentLedState = 0; // Bit 0: DECK, Bit 1: JOG, Bit 2: SHUTTLE
         
         private List<string> _buttonPhysicalNames = new List<string> { 
             "NONE", "JOG BUTTON", "PLAY/PAUSE", "IN", "OUT", "REWIND", "FFWD", 
-            "DECK/FILE", "CAP/UNDO", "ADD/DIV", "DOT 1", "DOT 2", "DOT 3", "DOT 4", "DOT 5" 
+            "DECK/FILE", "CAP/UNDO", "ADD/DIV", "DOT 1", "DOT 2", "DOT 3", "DOT 4", "DOT 5",
+            "SHUTTLE"
         };
 
         private DispatcherTimer _jogTimerCW = new DispatcherTimer();
@@ -130,7 +142,10 @@ namespace CanopusMapApp
                 }
                 else {
                     var labelCombo = new ComboBox { Margin = new Thickness(0, 0, 10, 0), Tag = bitId };
-                    labelCombo.SelectionChanged += (s, e) => RefreshPhysicalLists();
+                    labelCombo.SelectionChanged += (s, e) => {
+                        RefreshPhysicalLists();
+                        UpdateLedsFromLabels();
+                    };
                     System.Windows.Controls.Grid.SetColumn(labelCombo, 1); grid.Children.Add(labelCombo);
                     _labelCombos[bitId] = labelCombo;
                 }
@@ -179,25 +194,36 @@ namespace CanopusMapApp
                     try {
                         var device = DeviceList.Local.GetHidDevices(VendorId, ProductId).FirstOrDefault();
                         if (device != null && device.TryOpen(out HidStream stream)) {
+                            _activeStream = stream;
+                            _activeDevice = device;
                             Dispatcher.Invoke(() => { StatusText.Text = "Status: Connected"; StatusText.Foreground = Brushes.Lime; });
+                            Dispatcher.Invoke(() => UpdateDiagnosticsDevice(device));
+                            Dispatcher.Invoke(UpdateLedsFromLabels);
+                            UpdateLeds(_currentLedState);
                             using (stream) {
                                 stream.ReadTimeout = Timeout.Infinite;
                                 byte[] buffer = new byte[device.GetMaxInputReportLength()];
                                 while (true) {
                                     int bytesRead = stream.Read(buffer);
-                                    if (bytesRead > 0) { try { HandleHidData(buffer); } catch { } }
+                                    if (bytesRead > 0) { try { HandleHidData(buffer, bytesRead); } catch { } }
                                 }
                             }
                         }
                     } catch { }
+                    _activeStream = null;
+                    _activeDevice = null;
+                    Dispatcher.Invoke(() => UpdateDiagnosticsDevice(null));
                     Dispatcher.Invoke(() => { StatusText.Text = "Status: Searching for JD-1..."; StatusText.Foreground = Brushes.Orange; });
                     Thread.Sleep(2000);
                 }
             });
         }
 
-        private void HandleHidData(byte[] buffer)
+        private void HandleHidData(byte[] buffer, int bytesRead)
         {
+            var report = buffer.Take(bytesRead).ToArray();
+            Dispatcher.Invoke(() => _diagnosticsWindow?.AppendInputReport(report));
+
             byte reportId = buffer[0];
             if (reportId == 0x02) {
                 sbyte jog = (sbyte)buffer[1];
@@ -211,6 +237,117 @@ namespace CanopusMapApp
             }
         }
 
+        private void UpdateLeds(byte ledMask)
+        {
+            SendLedFeatureReport(ledMask);
+        }
+
+        private bool SendOutputReport(byte[] report)
+        {
+            if (_activeStream == null) return false;
+            try
+            {
+                lock (_streamLock)
+                {
+                    _activeStream.Write(report);
+                }
+                Dispatcher.Invoke(() => _diagnosticsWindow?.AppendOutputReport(report, true, null));
+                if (report.Length >= 2)
+                {
+                    var ledMask = report[1];
+                    var ledStateText = $"LED: 0x{ledMask:X2} (DECK={(ledMask & 0x01) != 0}, JOG={(ledMask & 0x02) != 0}, SHUTTLE={(ledMask & 0x04) != 0})";
+                    System.Diagnostics.Debug.WriteLine($"LED State -> {ledStateText}");
+                    Dispatcher.Invoke(() => LedDebugText.Text = ledStateText);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => _diagnosticsWindow?.AppendOutputReport(report, false, ex.Message));
+                return false;
+            }
+        }
+
+        private bool SendFeatureReport(byte[] report)
+        {
+            if (_activeStream == null) return false;
+            try
+            {
+                lock (_streamLock)
+                {
+                    _activeStream.SetFeature(report);
+                }
+                Dispatcher.Invoke(() => _diagnosticsWindow?.AppendFeatureReport(report, true, null));
+                if (report.Length >= 2)
+                {
+                    var ledMask = report[1];
+                    var ledStateText = $"LED: 0x{ledMask:X2} (DECK={(ledMask & 0x01) != 0}, JOG={(ledMask & 0x02) != 0}, SHUTTLE={(ledMask & 0x04) != 0})";
+                    Dispatcher.Invoke(() => LedDebugText.Text = ledStateText);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => _diagnosticsWindow?.AppendFeatureReport(report, false, ex.Message));
+                return false;
+            }
+        }
+
+        private void SendLedFeatureReport(byte ledMask)
+        {
+            var report = NormalizeFeatureReport(new byte[] { LedFeatureReportId, ledMask });
+            if (!SendFeatureReport(report))
+            {
+                Dispatcher.Invoke(() => _diagnosticsWindow?.AppendFeatureReport(report, false, "Known LED feature report failed."));
+            }
+        }
+
+        private byte[] NormalizeReport(byte[] report)
+        {
+            var outputLength = _activeDevice?.GetMaxOutputReportLength() ?? report.Length;
+            if (outputLength <= 0)
+            {
+                outputLength = report.Length;
+            }
+
+            if (report.Length == outputLength)
+            {
+                return report.ToArray();
+            }
+
+            if (report.Length > outputLength)
+            {
+                return report.Take(outputLength).ToArray();
+            }
+
+            var padded = new byte[outputLength];
+            Array.Copy(report, padded, report.Length);
+            return padded;
+        }
+
+        private byte[] NormalizeFeatureReport(byte[] report)
+        {
+            var featureLength = _activeDevice?.GetMaxFeatureReportLength() ?? report.Length;
+            if (featureLength <= 0)
+            {
+                featureLength = report.Length;
+            }
+
+            if (report.Length == featureLength)
+            {
+                return report.ToArray();
+            }
+
+            if (report.Length > featureLength)
+            {
+                return report.Take(featureLength).ToArray();
+            }
+
+            var padded = new byte[featureLength];
+            Array.Copy(report, padded, report.Length);
+            return padded;
+        }
+
         private void CheckButtonStates(int current, int last, string group)
         {
             for (int i = 0; i < 8; i++) {
@@ -219,9 +356,70 @@ namespace CanopusMapApp
                 bool isPressed = (current & bit) != 0;
                 bool wasPressed = (last & bit) == 0;
                 
-                Dispatcher.Invoke(() => { if (isPressed) LightUp(id); else LightDown(id); });
+                Dispatcher.Invoke(() => { 
+                    if (isPressed) {
+                        LightUp(id); 
+                        UpdateLedsForButton(id, true);
+                    } else {
+                        LightDown(id); 
+                        UpdateLedsForButton(id, false);
+                    } 
+                });
                 if (isPressed && wasPressed) TriggerKey(id);
             }
+        }
+
+        private void UpdateLedsForButton(string bitId, bool isPressed)
+        {
+            if (isPressed)
+            {
+                _pressedButtons.Add(bitId);
+            }
+            else
+            {
+                _pressedButtons.Remove(bitId);
+            }
+
+            RebuildLedStateFromPressedButtons();
+        }
+
+        private void UpdateLedsFromLabels()
+        {
+            RebuildLedStateFromPressedButtons();
+        }
+
+        private void RebuildLedStateFromPressedButtons()
+        {
+            byte ledState = DeckLedMask;
+
+            foreach (var pressedButtonId in _pressedButtons)
+            {
+                if (!_labelCombos.TryGetValue(pressedButtonId, out var combo))
+                {
+                    continue;
+                }
+
+                ledState |= GetLedMaskForLabel(combo.SelectedItem?.ToString());
+            }
+
+            if (ledState == _currentLedState)
+            {
+                return;
+            }
+
+            _currentLedState = ledState;
+            UpdateLeds(_currentLedState);
+        }
+
+        private static byte GetLedMaskForLabel(string? label)
+        {
+            return label switch
+            {
+                "DECK/FILE" => DeckLedMask,
+                "JOG BUTTON" => JogLedMask,
+                "SHUTTLE" => ShuttleLedMask,
+                _ => 0
+            };
         }
 
         private void LightUpJog(string id) {
@@ -255,6 +453,66 @@ namespace CanopusMapApp
             MessageBox.Show("Configuration Saved!");
         }
 
+        private void OpenDiagnostics_Click(object sender, RoutedEventArgs e)
+        {
+            if (_diagnosticsWindow == null)
+            {
+                _diagnosticsWindow = new DeviceDiagnosticsWindow(SendManualReport, ProbeFeatureIds, TryGetDiagnosticsSnapshot());
+                _diagnosticsWindow.Owner = this;
+                _diagnosticsWindow.Closed += (_, _) => _diagnosticsWindow = null;
+                _diagnosticsWindow.Show();
+            }
+            else
+            {
+                _diagnosticsWindow.Activate();
+            }
+
+            UpdateDiagnosticsDevice(_activeDevice);
+        }
+
+        private bool SendManualReport(byte[] report)
+        {
+            var outputSent = (_activeDevice?.GetMaxOutputReportLength() ?? 0) > 0 && SendOutputReport(NormalizeReport(report));
+            var featureSent = (_activeDevice?.GetMaxFeatureReportLength() ?? 0) > 0 && SendFeatureReport(NormalizeFeatureReport(report));
+            return outputSent || featureSent;
+        }
+
+        private string ProbeFeatureIds()
+        {
+            if ((_activeDevice?.GetMaxFeatureReportLength() ?? 0) != 2)
+            {
+                return "Feature probing only runs for 2-byte feature reports.";
+            }
+
+            var masks = new byte[] { 0x01, 0x02, 0x04, 0x07 };
+            var successCount = 0;
+
+            foreach (var reportId in Enumerable.Range(0, 256).Select(static i => (byte)i))
+            {
+                foreach (var mask in masks)
+                {
+                    if (SendFeatureReport(new byte[] { reportId, mask }))
+                    {
+                        successCount++;
+                    }
+                }
+            }
+
+            return successCount > 0
+                ? $"Probe complete. {successCount} feature report(s) succeeded. Check the Feature Reports log."
+                : "Probe complete. No 2-byte feature reports succeeded for any report ID with masks 01, 02, 04, or 07.";
+        }
+
+        private HidDeviceSnapshot? TryGetDiagnosticsSnapshot()
+        {
+            return _activeDevice == null ? null : HidDiagnostics.CreateSnapshot(_activeDevice);
+        }
+
+        private void UpdateDiagnosticsDevice(HidDevice? device)
+        {
+            _diagnosticsWindow?.SetDeviceSnapshot(device == null ? null : HidDiagnostics.CreateSnapshot(device));
+        }
+
         private void LoadConfig() {
             if (!File.Exists(IniPath)) return;
             var lines = File.ReadAllLines(IniPath);
@@ -275,7 +533,7 @@ namespace CanopusMapApp
 
             _keyCombos["Jog_CW"].SelectedItem = Win32Key.RIGHT.ToString();
             _keyCombos["Jog_CCW"].SelectedItem = Win32Key.LEFT.ToString();
-
+            
             Set("Button_A0", "DOT 5", Win32Key.NONE);
             Set("Button_A1", "DOT 3", Win32Key.NONE);
             Set("Button_A2", "DOT 1", Win32Key.NONE);
@@ -295,7 +553,13 @@ namespace CanopusMapApp
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e) 
         { 
             if (!_reallyExit) { e.Cancel = true; this.Hide(); } 
-            else { if (_notifyIcon != null) _notifyIcon.Dispose(); _cts.Cancel(); }
+            else {
+                _currentLedState = 0;
+                UpdateLeds(0);
+                if (_notifyIcon != null) _notifyIcon.Dispose();
+                _diagnosticsWindow?.Close();
+                _cts.Cancel();
+            }
             base.OnClosing(e); 
         }
     }

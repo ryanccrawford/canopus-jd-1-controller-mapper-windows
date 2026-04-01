@@ -1,7 +1,7 @@
 ﻿<Window x:Class="CanopusMapApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Canopus JD-1 Pro Mapper" Height="800" Width="600" Background="#1e1e1e"
+        Title="Canopus JD-1 Pro Mapper" Height="800" Width="720" Background="#1e1e1e"
         Icon="trayIcon.ico"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="15">
@@ -14,6 +14,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,15">
             <TextBlock Text="CANOPUS JD-1 PRO MAPPER" FontSize="22" Foreground="White" FontWeight="Bold"/>
             <TextBlock x:Name="StatusText" Text="Status: Initializing..." Foreground="Orange" FontSize="14"/>
+            <TextBlock x:Name="LedDebugText" Text="LED: 0x07 (DECK=True, JOG=True, SHUTTLE=True)" Foreground="LightGray" FontSize="12" Margin="0,4,0,0"/>
             <TextBlock Text="App will stay active in System Tray when closed." Foreground="Gray" FontSize="10" Margin="0,5,0,0"/>
         </StackPanel>
 
@@ -33,6 +34,7 @@
         </ScrollViewer>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="Device Diagnostics" Click="OpenDiagnostics_Click" Width="170" Height="35" Margin="0,0,10,0" Background="#3a3a3a" Foreground="White" FontWeight="Bold"/>
             <Button Content="Save Mapping" Click="SaveConfig_Click" Width="150" Height="35" Background="DodgerBlue" Foreground="White" FontWeight="Bold"/>
         </StackPanel>
     </Grid>
