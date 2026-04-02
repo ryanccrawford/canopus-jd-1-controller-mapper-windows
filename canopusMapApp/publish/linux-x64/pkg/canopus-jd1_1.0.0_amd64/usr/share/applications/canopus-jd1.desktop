@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Canopus JD-1 Mapper
+Exec=/opt/canopus-jd1/canopusMapApp
+Terminal=false
+Type=Application
+Categories=Utility;AudioVideo;
+Icon=canopus-jd-1
+X-GNOME-UsesNotifications=true

@@ -1,0 +1,9 @@
+Package: canopus-jd1
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Canopus JD-1 Mapper <noreply@example.com>
+Description: Maps Canopus JD-1 HID controller to keyboard keys (Avalonia, cross-platform)
+Depends: libc6, libstdc++6, libgcc-s1
+Recommends: xdotool

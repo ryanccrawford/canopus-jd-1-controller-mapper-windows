@@ -1,4 +1,16 @@
+# Build output
 bin/
 obj/
+**/bin/
+**/obj/
+# Rider/IDE
 .idea/
+*.suo
 *.user
+*.userosscache
+*.sln.docstates
+# Avalonia publish artifacts
+canopusMapApp/publish/
+# OS files
+.DS_Store
+Thumbs.db
