@@ -1,5 +1,7 @@
 using System.Text;
-using System.Windows;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Interactivity;
 
 namespace CanopusMapApp
 {
@@ -21,14 +23,14 @@ namespace CanopusMapApp
             if (snapshot == null)
             {
                 ConnectionText.Text = "No JD-1 connected";
-                ConnectionText.Foreground = System.Windows.Media.Brushes.Orange;
+                ConnectionText.Foreground = Brushes.Orange;
                 DeviceSummaryText.Text = "Waiting for the HID device to appear.";
                 DeviceDetailsText.Text = string.Empty;
                 return;
             }
 
             ConnectionText.Text = "JD-1 detected";
-            ConnectionText.Foreground = System.Windows.Media.Brushes.Lime;
+            ConnectionText.Foreground = Brushes.Lime;
             DeviceSummaryText.Text = $"VID 0x{snapshot.VendorId:X4} PID 0x{snapshot.ProductId:X4} | Input {snapshot.MaxInputReportLength} | Output {snapshot.MaxOutputReportLength} | Feature {snapshot.MaxFeatureReportLength}";
 
             var sb = new StringBuilder();
@@ -69,10 +71,10 @@ namespace CanopusMapApp
 
         private void SendReport_Click(object sender, RoutedEventArgs e)
         {
-            if (!HidDiagnostics.TryParseHexBytes(ManualReportText.Text, out var bytes, out var error))
+            if (!HidDiagnostics.TryParseHexBytes(ManualReportText.Text ?? "", out var bytes, out var error))
             {
                 SendStatusText.Text = error;
-                SendStatusText.Foreground = System.Windows.Media.Brushes.OrangeRed;
+                SendStatusText.Foreground = Brushes.OrangeRed;
                 return;
             }
 
@@ -80,7 +82,7 @@ namespace CanopusMapApp
             SendStatusText.Text = sent
                 ? $"Sent {bytes.Length} byte(s): {HidDiagnostics.FormatBytes(bytes)}"
                 : "Send failed. Check the output log and connection state.";
-            SendStatusText.Foreground = sent ? System.Windows.Media.Brushes.Lime : System.Windows.Media.Brushes.OrangeRed;
+            SendStatusText.Foreground = sent ? Brushes.Lime : Brushes.OrangeRed;
         }
 
         private void ClearInputLog_Click(object sender, RoutedEventArgs e)
@@ -107,13 +109,13 @@ namespace CanopusMapApp
         {
             var result = _probeFeatureIds();
             SendStatusText.Text = result;
-            SendStatusText.Foreground = System.Windows.Media.Brushes.LightBlue;
+            SendStatusText.Foreground = Brushes.LightBlue;
         }
 
-        private static void AppendLogLine(System.Windows.Controls.TextBox textBox, string line)
+        private static void AppendLogLine(TextBox textBox, string line)
         {
-            textBox.AppendText(line + Environment.NewLine);
-            textBox.ScrollToEnd();
+            textBox.Text += line + Environment.NewLine;
+            textBox.CaretIndex = textBox.Text.Length;
         }
     }
 }

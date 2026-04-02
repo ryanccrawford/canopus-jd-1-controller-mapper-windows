@@ -1,8 +1,8 @@
-﻿<Window x:Class="CanopusMapApp.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CanopusMapApp.MainWindow"
         Title="Canopus JD-1 Pro Mapper" Height="800" Width="720" Background="#1e1e1e"
-        Icon="trayIcon.ico"
+        Icon="avares://canopusMapApp/trayIcon.ico"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="15">
         <Grid.RowDefinitions>
@@ -19,31 +19,24 @@
         </StackPanel>
 
         <TabControl x:Name="DeviceTabs" Grid.Row="1" Background="Transparent" BorderThickness="0">
-            <TabControl.Resources>
-                <Style TargetType="TabItem">
-                    <Setter Property="Header" Value="Device"/>
+            <TabControl.Styles>
+                <Style Selector="TabItem">
                     <Setter Property="Background" Value="#2d2d2d"/>
                     <Setter Property="Foreground" Value="Gray"/>
                     <Setter Property="BorderThickness" Value="0"/>
                     <Setter Property="Padding" Value="15,8"/>
                     <Setter Property="Margin" Value="0,0,5,0"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="TabItem">
-                                <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="4,4,0,0" Padding="{TemplateBinding Padding}">
-                                    <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsSelected" Value="True">
-                                        <Setter TargetName="Border" Property="Background" Value="#3a3a3a"/>
-                                        <Setter Property="Foreground" Value="White"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
+                    <Style Selector="^ /template/ Border#Border">
+                        <Setter Property="Background" Value="{Binding $parent[TabItem].Background}"/>
+                        <Setter Property="CornerRadius" Value="4,4,0,0"/>
+                        <Setter Property="Padding" Value="{Binding $parent[TabItem].Padding}"/>
+                    </Style>
+                    <Style Selector="^:selected">
+                        <Setter Property="Background" Value="#3a3a3a"/>
+                        <Setter Property="Foreground" Value="White"/>
+                    </Style>
                 </Style>
-            </TabControl.Resources>
+            </TabControl.Styles>
         </TabControl>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">

@@ -1,6 +1,6 @@
-<Window x:Class="CanopusMapApp.DeviceDiagnosticsWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CanopusMapApp.DeviceDiagnosticsWindow"
         Title="JD-1 Device Diagnostics"
         Height="720"
         Width="860"
@@ -31,7 +31,7 @@
             <Border Grid.Column="0" Background="#212121" CornerRadius="6" Padding="12" Margin="0,0,10,0">
                 <StackPanel>
                     <TextBlock Text="Device Details" FontSize="16" FontWeight="Bold" Foreground="White"/>
-                    <TextBox x:Name="DeviceDetailsText" Margin="0,8,0,0" IsReadOnly="True" Height="150" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0"/>
+                    <TextBox x:Name="DeviceDetailsText" Margin="0,8,0,0" IsReadOnly="True" Height="150" TextWrapping="Wrap" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0"/>
                 </StackPanel>
             </Border>
 
@@ -51,7 +51,7 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Input Reports" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 <Button DockPanel.Dock="Top" Content="Clear Input Log" Click="ClearInputLog_Click" Width="120" Height="28" Margin="0,8,0,8" HorizontalAlignment="Left" Background="#3a3a3a" Foreground="White"/>
-                <TextBox x:Name="InputLogText" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0" TextWrapping="NoWrap"/>
+                <TextBox x:Name="InputLogText" IsReadOnly="True" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0" TextWrapping="NoWrap"/>
             </DockPanel>
         </Border>
 
@@ -66,7 +66,7 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Output Reports" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 <Button DockPanel.Dock="Top" Content="Clear Output Log" Click="ClearOutputLog_Click" Width="130" Height="28" Margin="0,8,0,8" HorizontalAlignment="Left" Background="#3a3a3a" Foreground="White"/>
-                <TextBox x:Name="OutputLogText" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0" TextWrapping="NoWrap"/>
+                <TextBox x:Name="OutputLogText" IsReadOnly="True" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0" TextWrapping="NoWrap"/>
             </DockPanel>
         </Border>
 
@@ -74,7 +74,7 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Feature Reports" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 <Button DockPanel.Dock="Top" Content="Clear Feature Log" Click="ClearFeatureLog_Click" Width="130" Height="28" Margin="0,8,0,8" HorizontalAlignment="Left" Background="#3a3a3a" Foreground="White"/>
-                <TextBox x:Name="FeatureLogText" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0" TextWrapping="NoWrap"/>
+                <TextBox x:Name="FeatureLogText" IsReadOnly="True" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#d0d0d0" BorderThickness="0" TextWrapping="NoWrap"/>
             </DockPanel>
         </Border>
 
@@ -82,7 +82,7 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Feature Successes" FontSize="16" FontWeight="Bold" Foreground="White"/>
                 <Button DockPanel.Dock="Top" Content="Clear Success Log" Click="ClearFeatureSuccessLog_Click" Width="140" Height="28" Margin="0,8,0,8" HorizontalAlignment="Left" Background="#3a3a3a" Foreground="White"/>
-                <TextBox x:Name="FeatureSuccessLogText" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#9fe89f" BorderThickness="0" TextWrapping="NoWrap"/>
+                <TextBox x:Name="FeatureSuccessLogText" IsReadOnly="True" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto" Background="#101010" Foreground="#9fe89f" BorderThickness="0" TextWrapping="NoWrap"/>
             </DockPanel>
         </Border>
         </Grid>

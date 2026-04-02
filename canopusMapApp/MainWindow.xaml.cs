@@ -1,26 +1,19 @@
 ﻿using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Windows;
-using System.Windows.Threading;
+using System.Diagnostics;
+using Avalonia.Media;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using Avalonia.Interactivity;
+using Avalonia;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Platform;
+using Avalonia.Media.Imaging;
+
 using HidSharp;
 
-
-using Color = System.Windows.Media.Color;
-using Brushes = System.Windows.Media.Brushes;
-using Button = System.Windows.Controls.Button;
-using MessageBox = System.Windows.MessageBox;
-using ComboBox = System.Windows.Controls.ComboBox;
-using Border = System.Windows.Controls.Border;
-using TextBlock = System.Windows.Controls.TextBlock;
-using Grid = System.Windows.Controls.Grid;
-using TabControl = System.Windows.Controls.TabControl;
-using TabItem = System.Windows.Controls.TabItem;
-using StackPanel = System.Windows.Controls.StackPanel;
-using ScrollViewer = System.Windows.Controls.ScrollViewer;
-using ScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility;
-using ColumnDefinition = System.Windows.Controls.ColumnDefinition;
-using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace CanopusMapApp
 {
@@ -68,7 +61,7 @@ namespace CanopusMapApp
         };
 
         private CancellationTokenSource _mainCts = new CancellationTokenSource();
-        private System.Windows.Forms.NotifyIcon? _notifyIcon;
+        private TrayIcon? _trayIcon;
         private bool _reallyExit = false;
 
         public MainWindow()
@@ -80,29 +73,24 @@ namespace CanopusMapApp
 
         private void SetupTrayIcon()
         { 
-            _notifyIcon = new System.Windows.Forms.NotifyIcon();
-            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "trayIcon.ico");
-            if (File.Exists(iconPath))
-            {
-                _notifyIcon.Icon = new System.Drawing.Icon(iconPath);
-            }
-            else
-            {
-                _notifyIcon.Icon = System.Drawing.SystemIcons.Application; 
-            }
-          
-            _notifyIcon.Visible = true;
-            _notifyIcon.Text = "Canopus JD-1 Mapper";
-            _notifyIcon.DoubleClick += (s, e) => { 
+            _trayIcon = new TrayIcon();
+            _trayIcon.Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://canopusMapApp/trayIcon.ico")));
+            _trayIcon.ToolTipText = "Canopus JD-1 Mapper";
+            _trayIcon.IsVisible = true;
+            _trayIcon.Clicked += (s, e) => { 
                 this.Show(); 
                 this.WindowState = WindowState.Normal;
                 this.Activate();
             };
             
-            var contextMenu = new System.Windows.Forms.ContextMenuStrip();
-            contextMenu.Items.Add("Open Settings", null, (s, e) => { this.Show(); this.WindowState = WindowState.Normal; });
-            contextMenu.Items.Add("Exit Completely", null, (s, e) => { _reallyExit = true; this.Close(); });
-            _notifyIcon.ContextMenuStrip = contextMenu;
+            var menu = new NativeMenu();
+            var openItem = new NativeMenuItem("Open Settings");
+            openItem.Click += (s, e) => { this.Show(); this.WindowState = WindowState.Normal; };
+            menu.Items.Add(openItem);
+            var exitItem = new NativeMenuItem("Exit Completely");
+            exitItem.Click += (s, e) => { _reallyExit = true; this.Close(); };
+            menu.Items.Add(exitItem);
+            _trayIcon.Menu = menu;
         }
 
         private void InitializeDeviceUI(DeviceContext ctx)
@@ -147,7 +135,7 @@ namespace CanopusMapApp
                 if (bitId.StartsWith("Jog")) {
                     var staticLabel = new TextBlock { 
                         Text = bitId == "Jog_CW" ? "JOG WHEEL CW" : "JOG WHEEL CCW",
-                        Foreground = Brushes.SkyBlue, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center 
+                        Foreground = Brushes.SkyBlue, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center 
                     };
                     Grid.SetColumn(staticLabel, 1); grid.Children.Add(staticLabel);
                 }
@@ -161,7 +149,7 @@ namespace CanopusMapApp
                     ctx.LabelCombos[bitId] = labelCombo;
                 }
 
-                var keyCombo = new ComboBox { ItemsSource = keyOptions, IsEditable = true, Tag = bitId };
+                var keyCombo = new ComboBox { ItemsSource = keyOptions, Tag = bitId };
                 Grid.SetColumn(keyCombo, 2); grid.Children.Add(keyCombo);
 
                 rowBorder.Child = grid;
@@ -171,7 +159,7 @@ namespace CanopusMapApp
             }
 
             ctx.Tab = new TabItem { 
-                Header = $"JD-1 ({ctx.SerialNumber})",
+                Header = GetDeviceHeader(ctx),
                 Content = scrollViewer 
             };
             DeviceTabs.Items.Add(ctx.Tab);
@@ -231,7 +219,7 @@ namespace CanopusMapApp
                             foreach (var path in removedPaths) {
                                 var ctx = _devices[path];
                                 ctx.ReadCts.Cancel();
-                                Dispatcher.Invoke(() => {
+                                Dispatcher.UIThread.Invoke(() => {
                                     DeviceTabs.Items.Remove(ctx.Tab);
                                     _devices.Remove(path);
                                     UpdateStatusText();
@@ -248,7 +236,7 @@ namespace CanopusMapApp
                                         Device = device
                                     };
                                     _devices[device.DevicePath] = ctx;
-                                    Dispatcher.Invoke(() => {
+                                    Dispatcher.UIThread.Invoke(() => {
                                         InitializeDeviceUI(ctx);
                                         UpdateStatusText();
                                     });
@@ -280,8 +268,8 @@ namespace CanopusMapApp
                     try {
                         if (ctx.Device != null && ctx.Device.TryOpen(out HidStream stream)) {
                             ctx.Stream = stream;
-                            Dispatcher.Invoke(() => UpdateDiagnosticsDevice(ctx.Device));
-                            Dispatcher.Invoke(() => UpdateLedsFromLabels(ctx));
+                            Dispatcher.UIThread.Invoke(() => UpdateDiagnosticsDevice(ctx.Device));
+                            Dispatcher.UIThread.Invoke(() => UpdateLedsFromLabels(ctx));
                             UpdateLeds(ctx, ctx.CurrentLedState);
                             using (stream) {
                                 stream.ReadTimeout = Timeout.Infinite;
@@ -302,7 +290,7 @@ namespace CanopusMapApp
         private void HandleHidData(DeviceContext ctx, byte[] buffer, int bytesRead)
         {
             var report = buffer.Take(bytesRead).ToArray();
-            Dispatcher.Invoke(() => {
+            Dispatcher.UIThread.Invoke(() => {
                 if (DeviceTabs.SelectedItem == ctx.Tab)
                     _diagnosticsWindow?.AppendInputReport(report);
             });
@@ -334,7 +322,7 @@ namespace CanopusMapApp
                 {
                     ctx.Stream.Write(report);
                 }
-                Dispatcher.Invoke(() => {
+                Dispatcher.UIThread.Invoke(() => {
                     if (DeviceTabs.SelectedItem == ctx.Tab)
                         _diagnosticsWindow?.AppendOutputReport(report, true, null);
                 });
@@ -342,7 +330,7 @@ namespace CanopusMapApp
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => {
+                Dispatcher.UIThread.Invoke(() => {
                     if (DeviceTabs.SelectedItem == ctx.Tab)
                         _diagnosticsWindow?.AppendOutputReport(report, false, ex.Message);
                 });
@@ -359,7 +347,7 @@ namespace CanopusMapApp
                 {
                     ctx.Stream.SetFeature(report);
                 }
-                Dispatcher.Invoke(() => {
+                Dispatcher.UIThread.Invoke(() => {
                     if (DeviceTabs.SelectedItem == ctx.Tab)
                         _diagnosticsWindow?.AppendFeatureReport(report, true, null);
                 });
@@ -367,7 +355,7 @@ namespace CanopusMapApp
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => {
+                Dispatcher.UIThread.Invoke(() => {
                     if (DeviceTabs.SelectedItem == ctx.Tab)
                         _diagnosticsWindow?.AppendFeatureReport(report, false, ex.Message);
                 });
@@ -381,7 +369,7 @@ namespace CanopusMapApp
             SendFeatureReport(ctx, report);
             if (DeviceTabs.SelectedItem == ctx.Tab) {
                 var ledStateText = $"LED: 0x{ledMask:X2} (DECK={(ledMask & 0x01) != 0}, JOG={(ledMask & 0x02) != 0}, SHUTTLE={(ledMask & 0x04) != 0})";
-                Dispatcher.Invoke(() => LedDebugText.Text = ledStateText);
+                Dispatcher.UIThread.Invoke(() => LedDebugText.Text = ledStateText);
             }
         }
 
@@ -415,7 +403,7 @@ namespace CanopusMapApp
                 bool isPressed = (current & bit) != 0;
                 bool wasPressed = (last & bit) == 0;
                 
-                Dispatcher.Invoke(() => { 
+                Dispatcher.UIThread.Invoke(() => { 
                     if (isPressed) {
                         LightUp(ctx, id); 
                         UpdateLedsForButton(ctx, id, true);
@@ -463,7 +451,7 @@ namespace CanopusMapApp
         }
 
         private void LightUpJog(DeviceContext ctx, string id) {
-            Dispatcher.Invoke(() => {
+            Dispatcher.UIThread.Invoke(() => {
                 LightUp(ctx, id);
                 if (id == "Jog_CW") { ctx.JogTimerCW.Stop(); ctx.JogTimerCW.Start(); }
                 else { ctx.JogTimerCCW.Stop(); ctx.JogTimerCCW.Start(); }
@@ -474,12 +462,19 @@ namespace CanopusMapApp
         private void LightDown(DeviceContext ctx, string id) { if (ctx.UiRows.ContainsKey(id)) ctx.UiRows[id].Background = new SolidColorBrush(Color.FromRgb(45, 45, 45)); }
 
         private void TriggerKey(DeviceContext ctx, string inputName) {
-            Dispatcher.Invoke(() => {
+            Dispatcher.UIThread.Invoke(() => {
+                // Do not emit system key events while the app windows are active/focused
+                if (ShouldSuppressKeyEmulation()) return;
                 if (ctx.KeyCombos.TryGetValue(inputName, out var combo) && combo.SelectedItem != null) {
                     if (Enum.TryParse(combo.SelectedItem.ToString(), out Win32Key key) && key != Win32Key.NONE) 
                         NativeKeyboard.SendKey(key);
                 }
             });
+        }
+
+        private bool ShouldSuppressKeyEmulation()
+        {
+            return (this.IsVisible && this.IsActive) || (_diagnosticsWindow?.IsVisible == true && _diagnosticsWindow.IsActive);
         }
 
         private void SaveConfig_Click(object sender, RoutedEventArgs e) {
@@ -493,7 +488,7 @@ namespace CanopusMapApp
                 }
             }
             File.WriteAllText(IniPath, sb.ToString());
-            MessageBox.Show("Configuration Saved!");
+            Console.WriteLine("Configuration Saved!");
         }
 
         private void OpenDiagnostics_Click(object sender, RoutedEventArgs e)
@@ -507,7 +502,6 @@ namespace CanopusMapApp
                     report => SendManualReport(ctx, report), 
                     () => ProbeFeatureIds(ctx), 
                     ctx.Device == null ? null : HidDiagnostics.CreateSnapshot(ctx.Device));
-                _diagnosticsWindow.Owner = this;
                 _diagnosticsWindow.Closed += (_, _) => _diagnosticsWindow = null;
                 _diagnosticsWindow.Show();
             } else {
@@ -518,9 +512,31 @@ namespace CanopusMapApp
 
         private bool SendManualReport(DeviceContext ctx, byte[] report)
         {
-            var outputSent = (ctx.Device?.GetMaxOutputReportLength() ?? 0) > 0 && SendOutputReport(ctx, NormalizeReport(ctx, report));
-            var featureSent = (ctx.Device?.GetMaxFeatureReportLength() ?? 0) > 0 && SendFeatureReport(ctx, NormalizeFeatureReport(ctx, report));
-            return outputSent || featureSent;
+            try
+            {
+                // If we don't have an open stream (likely due to permissions), surface a friendly error and bail.
+                if (ctx.Stream == null)
+                {
+                    throw new UnauthorizedAccessException("HID device not open. Check udev permissions for /dev/hidraw* (see README Linux Setup).");
+                }
+
+                var outputLen = ctx.Device?.GetMaxOutputReportLength() ?? 0;
+                var featureLen = ctx.Device?.GetMaxFeatureReportLength() ?? 0;
+
+                var outputSent = outputLen > 0 && SendOutputReport(ctx, NormalizeReport(ctx, report));
+                var featureSent = featureLen > 0 && SendFeatureReport(ctx, NormalizeFeatureReport(ctx, report));
+                return outputSent || featureSent;
+            }
+            catch (Exception ex)
+            {
+                // Log the error lines into diagnostics panes so the user can see why sending failed
+                Dispatcher.UIThread.Post(() =>
+                {
+                    _diagnosticsWindow?.AppendOutputReport(report, false, ex.Message);
+                    _diagnosticsWindow?.AppendFeatureReport(report, false, ex.Message);
+                });
+                return false;
+            }
         }
 
         private string ProbeFeatureIds(DeviceContext ctx)
@@ -548,6 +564,7 @@ namespace CanopusMapApp
             }
             var lines = File.ReadAllLines(IniPath);
             bool deviceFound = false;
+            bool anyApplied = false;
             foreach (var line in lines) {
                 if (line.StartsWith("[DEVICE|")) {
                     deviceFound = line.Contains(ctx.SerialNumber);
@@ -557,61 +574,203 @@ namespace CanopusMapApp
                 if (line.StartsWith("[")) break;
 
                 var parts = line.Split('|');
-                if (parts.Length == 3 && ctx.KeyCombos.ContainsKey(parts[0])) {
-                    if (ctx.LabelCombos.ContainsKey(parts[0])) ctx.LabelCombos[parts[0]].SelectedItem = parts[1];
-                    ctx.KeyCombos[parts[0]].SelectedItem = parts[2];
+                if (parts.Length != 3) continue;
+                var bitId = parts[0];
+                var label = parts[1];
+                var key = parts[2];
+
+                if (ctx.LabelCombos.ContainsKey(bitId)) {
+                    ctx.LabelCombos[bitId].SelectedItem = label;
+                    anyApplied = true;
+                }
+                if (ctx.KeyCombos.ContainsKey(bitId)) {
+                    ctx.KeyCombos[bitId].SelectedItem = key;
+                    anyApplied = true;
                 }
             }
-            if (!deviceFound) ApplyDefaultHardwareMap(ctx);
-        }
-
-        private void ApplyDefaultHardwareMap(DeviceContext ctx) {
-            void Set(string id, string label, Win32Key key) {
-                if (ctx.LabelCombos.ContainsKey(id)) ctx.LabelCombos[id].SelectedItem = label;
-                ctx.KeyCombos[id].SelectedItem = key.ToString();
+            if (!anyApplied) {
+                ApplyDefaultHardwareMap(ctx);
             }
-            ctx.KeyCombos["Jog_CW"].SelectedItem = Win32Key.RIGHT.ToString();
-            ctx.KeyCombos["Jog_CCW"].SelectedItem = Win32Key.LEFT.ToString();
-            Set("Button_A0", "DOT 5", Win32Key.NONE);
-            Set("Button_A1", "DOT 3", Win32Key.NONE);
-            Set("Button_A2", "DOT 1", Win32Key.NONE);
-            Set("Button_A3", "REWIND", Win32Key.J);
-            Set("Button_A4", "CAP/UNDO", Win32Key.NONE);
-            Set("Button_A5", "IN", Win32Key.I);
-            Set("Button_A6", "ADD/DIV", Win32Key.NONE);
-            Set("Button_A7", "DOT 4", Win32Key.NONE);
-            Set("Button_B0", "DOT 2", Win32Key.NONE);
-            Set("Button_B1", "DECK/FILE", Win32Key.NONE);
-            Set("Button_B2", "FFWD", Win32Key.L);
-            Set("Button_B3", "OUT", Win32Key.O);
-            Set("Button_B4", "PLAY/PAUSE", Win32Key.SPACE);
-            Set("Button_B5", "JOG BUTTON", Win32Key.NONE);
+            RefreshPhysicalLists(ctx);
         }
 
-        protected override void OnClosing(System.ComponentModel.CancelEventArgs e) 
+        private void ApplyDefaultHardwareMap(DeviceContext ctx)
+        {
+            // Default physical label assignment per button bit
+            var labelDefaults = new Dictionary<string, string>
+            {
+                ["Button_A0"] = "PLAY/PAUSE",
+                ["Button_A1"] = "REWIND",
+                ["Button_A2"] = "FFWD",
+                ["Button_A3"] = "IN",
+                ["Button_A4"] = "OUT",
+                ["Button_A5"] = "DECK/FILE",
+                ["Button_A6"] = "CAP/UNDO",
+                ["Button_A7"] = "ADD/DIV",
+                ["Button_B0"] = "DOT 1",
+                ["Button_B1"] = "DOT 2",
+                ["Button_B2"] = "DOT 3",
+                ["Button_B3"] = "DOT 4",
+                ["Button_B4"] = "DOT 5",
+                ["Button_B5"] = "SHUTTLE",
+            };
+
+            foreach (var (bitId, label) in labelDefaults)
+            {
+                if (ctx.LabelCombos.TryGetValue(bitId, out var combo))
+                    combo.SelectedItem = label;
+            }
+
+            // Ensure available label choices refresh after defaults
+            RefreshPhysicalLists(ctx);
+
+            // Default key mapping for each input (can be changed in UI)
+            var keyDefaults = new Dictionary<string, string>
+            {
+                ["Jog_CW"] = "RIGHT",
+                ["Jog_CCW"] = "LEFT",
+                ["Button_A0"] = "SPACE",       // PLAY/PAUSE
+                ["Button_A1"] = "LEFT",        // REWIND
+                ["Button_A2"] = "RIGHT",       // FFWD
+                ["Button_A3"] = "I",           // IN
+                ["Button_A4"] = "O",           // OUT
+                ["Button_A5"] = "D",           // DECK/FILE
+                ["Button_A6"] = "Z",           // CAP/UNDO
+                ["Button_A7"] = "NONE",        // ADD/DIV (no default)
+                ["Button_B0"] = "F1",          // DOT 1
+                ["Button_B1"] = "F2",          // DOT 2
+                ["Button_B2"] = "F3",          // DOT 3
+                ["Button_B3"] = "F4",          // DOT 4
+                ["Button_B4"] = "F5",          // DOT 5
+                ["Button_B5"] = "NONE",        // SHUTTLE (no default)
+            };
+
+            foreach (var (bitId, keyName) in keyDefaults)
+            {
+                if (ctx.KeyCombos.TryGetValue(bitId, out var combo))
+                    combo.SelectedItem = keyName;
+            }
+        }
+
+        protected override void OnClosing(WindowClosingEventArgs e) 
         { 
-            if (!_reallyExit) { e.Cancel = true; this.Hide(); } 
-            else {
-                lock (_devicesLock) {
-                    foreach (var ctx in _devices.Values) {
-                        ctx.ReadCts.Cancel();
-                        try { UpdateLeds(ctx, 0); } catch { }
-                    }
+            if (!_reallyExit) { 
+                e.Cancel = true; 
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && _trayIcon?.IsVisible == true)
+                {
+                    this.Hide();
                 }
-                if (_notifyIcon != null) _notifyIcon.Dispose();
-                _diagnosticsWindow?.Close();
-                _mainCts.Cancel();
+                else
+                {
+                    // Keep in taskbar on Linux/macOS
+                    this.ShowInTaskbar = true;
+                    this.WindowState = WindowState.Minimized;
+                }
+                return; 
             }
+
+            lock (_devicesLock) {
+                foreach (var ctx in _devices.Values) {
+                    ctx.ReadCts.Cancel();
+                    try { UpdateLeds(ctx, 0); } catch { }
+                }
+            }
+            _trayIcon?.Dispose();
+            _mainCts.Cancel();
             base.OnClosing(e); 
+        }
+
+        private static bool HasSerial(DeviceContext ctx)
+        {
+            return !string.IsNullOrWhiteSpace(ctx.SerialNumber) &&
+                   !ctx.SerialNumber.Equals("n/a", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string GetDeviceHeader(DeviceContext ctx)
+        {
+            if (HasSerial(ctx)) return $"JD-1 ({ctx.SerialNumber})";
+            var index = 1 + _devices.Values.Count(d => d != ctx && !HasSerial(d));
+            return $"JD-1 ({index})";
         }
     }
 
     public static class NativeKeyboard {
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+
         public static void SendKey(Win32Key key) {
-            keybd_event((byte)key, 0, 0, 0); keybd_event((byte)key, 0, 2, 0); 
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+                keybd_event((byte)key, 0, 0, 0);
+                keybd_event((byte)key, 0, 2, 0);
+            } else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
+                var keyName = MapKey(key);
+                if (!string.IsNullOrEmpty(keyName)) {
+                    Process.Start("xdotool", $"key {keyName}");
+                }
+            }
         }
+
+        private static string MapKey(Win32Key key) => key switch {
+            Win32Key.NONE => "",
+            Win32Key.SPACE => "space",
+            Win32Key.LEFT => "Left",
+            Win32Key.RIGHT => "Right",
+            Win32Key.UP => "Up",
+            Win32Key.DOWN => "Down",
+            Win32Key.RETURN => "Return",
+            Win32Key.BACK => "BackSpace",
+            Win32Key.TAB => "Tab",
+            Win32Key.ESCAPE => "Escape",
+            Win32Key.A => "a",
+            Win32Key.B => "b",
+            Win32Key.C => "c",
+            Win32Key.D => "d",
+            Win32Key.E => "e",
+            Win32Key.F => "f",
+            Win32Key.G => "g",
+            Win32Key.H => "h",
+            Win32Key.I => "i",
+            Win32Key.J => "j",
+            Win32Key.K => "k",
+            Win32Key.L => "l",
+            Win32Key.M => "m",
+            Win32Key.N => "n",
+            Win32Key.O => "o",
+            Win32Key.P => "p",
+            Win32Key.Q => "q",
+            Win32Key.R => "r",
+            Win32Key.S => "s",
+            Win32Key.T => "t",
+            Win32Key.U => "u",
+            Win32Key.V => "v",
+            Win32Key.W => "w",
+            Win32Key.X => "x",
+            Win32Key.Y => "y",
+            Win32Key.Z => "z",
+            Win32Key.D0 => "0",
+            Win32Key.D1 => "1",
+            Win32Key.D2 => "2",
+            Win32Key.D3 => "3",
+            Win32Key.D4 => "4",
+            Win32Key.D5 => "5",
+            Win32Key.D6 => "6",
+            Win32Key.D7 => "7",
+            Win32Key.D8 => "8",
+            Win32Key.D9 => "9",
+            Win32Key.F1 => "F1",
+            Win32Key.F2 => "F2",
+            Win32Key.F3 => "F3",
+            Win32Key.F4 => "F4",
+            Win32Key.F5 => "F5",
+            Win32Key.F6 => "F6",
+            Win32Key.F7 => "F7",
+            Win32Key.F8 => "F8",
+            Win32Key.F9 => "F9",
+            Win32Key.F10 => "F10",
+            Win32Key.F11 => "F11",
+            Win32Key.F12 => "F12",
+            _ => ""
+        };
     }
 
     public enum Win32Key : byte {
