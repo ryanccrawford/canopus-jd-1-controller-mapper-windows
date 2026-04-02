@@ -18,20 +18,33 @@
             <TextBlock Text="App will stay active in System Tray when closed." Foreground="Gray" FontSize="10" Margin="0,5,0,0"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="MappingList">
-                <Grid Margin="10,0,10,5">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="180"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Bit ID" Foreground="Gray" FontSize="10"/>
-                    <TextBlock Grid.Column="1" Text="Physical Label" Foreground="Gray" FontSize="10"/>
-                    <TextBlock Grid.Column="2" Text="Keyboard Key" Foreground="Gray" FontSize="10"/>
-                </Grid>
-            </StackPanel>
-        </ScrollViewer>
+        <TabControl x:Name="DeviceTabs" Grid.Row="1" Background="Transparent" BorderThickness="0">
+            <TabControl.Resources>
+                <Style TargetType="TabItem">
+                    <Setter Property="Header" Value="Device"/>
+                    <Setter Property="Background" Value="#2d2d2d"/>
+                    <Setter Property="Foreground" Value="Gray"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="Padding" Value="15,8"/>
+                    <Setter Property="Margin" Value="0,0,5,0"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabItem">
+                                <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="4,4,0,0" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#3a3a3a"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </TabControl.Resources>
+        </TabControl>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
             <Button Content="Device Diagnostics" Click="OpenDiagnostics_Click" Width="170" Height="35" Margin="0,0,10,0" Background="#3a3a3a" Foreground="White" FontWeight="Bold"/>
